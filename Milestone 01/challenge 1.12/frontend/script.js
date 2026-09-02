@@ -1,51 +1,112 @@
-// Conversation history (full context)
-const messages = [];
-
-const chatDisplay = document.getElementById('chatDisplay');
 const messageInput = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
+const chatDisplay = document.getElementById('chatDisplay');
+
+// Conversation history
+const messages = [];
 
 /**
- * Render a message bubble in the chat display
+ * Render a message in the chat window
  */
 function renderMessage(role, content) {
-    const messageDiv = document.createElement('div');
-    messageDiv.classList.add('message', role);
-    messageDiv.textContent = content;
-    chatDisplay.appendChild(messageDiv);
-    
-    // Auto-scroll to bottom
-    chatDisplay.scrollTop = chatDisplay.scrollHeight;
+  const messageBubble = document.createElement('div');
+
+  messageBubble.className = `message ${role}`;
+
+  messageBubble.textContent = content;
+
+  chatDisplay.appendChild(messageBubble);
+
+  // Automatically scroll to latest message
+  chatDisplay.scrollTop = chatDisplay.scrollHeight;
 }
 
 /**
- * Handle sending the message
+ * Send message to backend
  */
 async function sendMessage() {
-    const text = messageInput.value.trim();
-    if (!text) return;
+  const text = messageInput.value.trim();
 
-    // 1. Add user message to state
-    messages.push({ role: "user", content: text });
+  // Don't send empty messages
+  if (!text) {
+    return;
+  }
 
-    // 2. Render user bubble
-    renderMessage("user", text);
+  // Add user message to conversation history
+  messages.push({
+    role: 'user',
+    content: text
+  });
 
-    // 3. Clear input
-    messageInput.value = "";
+  // Show user message
+  renderMessage('user', text);
 
-    // TODO: Call your backend /chat route here
-    // Send the full `messages` array — not just the latest message
-    // Hint: fetch('http://localhost:3000/chat', { method: 'POST', ... })
-    // On response: add { role: 'assistant', content: reply } to messages
-    // Render the assistant bubble in chatDisplay
+  // Clear input
+  messageInput.value = '';
+
+  // Disable button while waiting
+  sendBtn.disabled = true;
+  sendBtn.textContent = 'Thinking...';
+
+  try {
+    // Send FULL conversation history to backend
+    const response = await fetch('http://localhost:3000/chat', {
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json'
+      },
+
+      body: JSON.stringify({
+        messages: messages
+      })
+    });
+
+    const data = await response.json();
+
+    // Handle backend errors
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to get AI response');
+    }
+
+    const reply = data.reply;
+
+    // Add AI response to conversation history
+    messages.push({
+      role: 'assistant',
+      content: reply
+    });
+
+    // Show AI response
+    renderMessage('assistant', reply);
+
+  } catch (error) {
+    console.error('Error:', error);
+
+    renderMessage(
+      'assistant',
+      'Sorry, something went wrong. Please try again.'
+    );
+
+  } finally {
+    // Enable button again
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send';
+
+    messageInput.focus();
+  }
 }
 
-// Event Listeners
+/**
+ * Send when button is clicked
+ */
 sendBtn.addEventListener('click', sendMessage);
 
-messageInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        sendMessage();
-    }
+/**
+ * Send when Enter is pressed
+ */
+messageInput.addEventListener('keypress', (event) => {
+  if (event.key === 'Enter') {
+    sendMessage();
+  }
 });
